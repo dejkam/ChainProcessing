@@ -1589,452 +1589,322 @@ with tab3:
                 st.success("All IRL training done.")
                 progress_bar.empty()
                 
-import matplotlib.pyplot as plt
 
 # -------------------------------------
 # IRL Tab 4: Agent-by-Agent Analysis
 # -------------------------------------
 
-with tab4:
-    st.title("IRL Model Results Per Agent")
+    with tab4:
+    # ────────────────────────────────────────────────
+    # 1. Folder layout (NEW)
+    # ────────────────────────────────────────────────
+        BASE_10U_FOLDER = "../IRL_Behavioral_Cloning/output/10_users"
 
-    # -----------------------------------------
-    # Paths
-    # -----------------------------------------
-    OUTPUT_FOLDER        = "../IRL/output/IRL_MaxEnt_Adam_ES/New/2020/04/before"
-    COMPARE_FOLDER       = "../IRL/output/IRL_MaxEnt_Adam_ES/New/2020/04/after"
+        # categorical (non‑time) results
+        OUTPUT_FOLDER       = os.path.join(BASE_10U_FOLDER, "before", "cat")
+        COMPARE_FOLDER      = os.path.join(BASE_10U_FOLDER, "After",  "cat")
 
-    # We hide Time-based empirical feature plot, 
-    # but still keep Time-based learned weights.
-    OUTPUT_FOLDER_Time   = "../IRL/output/IRL_MaxEnt_Adam_ES_Time/New/2020/04/before"
-    COMPARE_FOLDER_Time  = "../IRL/output/IRL_MaxEnt_Adam_ES_Time/New/2020/04/after"
+        # time‑based results
+        OUTPUT_FOLDER_Time  = os.path.join(BASE_10U_FOLDER, "before", "time")
+        COMPARE_FOLDER_Time = os.path.join(BASE_10U_FOLDER, "After",  "time")
 
-    DATA_FOLDER          = "dataset/1000_users_chain/2020/4/1"
+        # agent mapping
+        mapping_path = os.path.join(BASE_10U_FOLDER, "agent_mapping.csv")
 
-    # -----------------------------------------
-    # Load agent_id mapping
-    # -----------------------------------------
-    try:
-        mapping_path = os.path.join(DATA_FOLDER, "agent_id_mapping.csv")
-        mapping_df = pd.read_csv(mapping_path)
-    except Exception as e:
-        st.error(f"Error loading agent_id_mapping.csv: {e}")
-        mapping_df = pd.DataFrame(columns=["FactorizedID", "agent_id"])
-
-    # FactorizedIDs from the "before" folder
-    available_fids = sorted([
-        f for f in os.listdir(OUTPUT_FOLDER)
-        if os.path.isdir(os.path.join(OUTPUT_FOLDER, f)) and f.isdigit()
-    ])
-
-    if "current_irl_agent_index" not in st.session_state:
-        st.session_state["current_irl_agent_index"] = 0
-
-    # Utility: get agent_id from FactorizedID
-    def get_agent_id_from_fid(fid):
+        # ────────────────────────────────────────────────
+        # 2. Load mapping (FactorizedID ↔ agent_id)
+        # ────────────────────────────────────────────────
         try:
-            match = mapping_df[mapping_df["FactorizedID"] == int(fid)]
-            return match.iloc[0]["agent_id"] if not match.empty else "Unknown"
-        except:
-            return "Unknown"
+            mapping_df = pd.read_csv(mapping_path)
+        except Exception as e:
+            st.error(f"Error loading agent_mapping.csv: {e}")
+            mapping_df = pd.DataFrame(columns=["FactorizedID", "agent_id"])
 
-    # Navigation
-    col_nav1, col_nav2, col_nav3 = st.columns([1,1,2])
+        def get_agent_id_from_fid(fid: str) -> str:
+            try:
+                row = mapping_df[mapping_df["FactorizedID"] == int(fid)]
+                return row.iloc[0]["agent_id"] if not row.empty else "Unknown"
+            except Exception:
+                return "Unknown"
 
-    with col_nav1:
-        if st.button("⬅️ Previous Agent") and st.session_state["current_irl_agent_index"] > 0:
-            st.session_state["current_irl_agent_index"] -= 1
-    with col_nav2:
-        if st.button("➡️ Next Agent") and st.session_state["current_irl_agent_index"] < len(available_fids) - 1:
-            st.session_state["current_irl_agent_index"] += 1
-    with col_nav3:
-        manual_fid = st.text_input("🔎 Jump to FactorizedID:", value="")
-        if manual_fid.strip().isdigit() and manual_fid.strip() in available_fids:
-            st.session_state["current_irl_agent_index"] = available_fids.index(manual_fid.strip())
+        # ────────────────────────────────────────────────
+        # 3. Which FactorizedIDs are available?
+        # ────────────────────────────────────────────────
+        available_fids = sorted([
+            f for f in os.listdir(OUTPUT_FOLDER)
+            if os.path.isdir(os.path.join(OUTPUT_FOLDER, f)) and f.isdigit()
+        ])
 
-    st.write("---")
-    compare_check = st.checkbox("🔁 Compare with After (Circuit Breaker)")
+        if "current_irl_agent_index" not in st.session_state:
+            st.session_state["current_irl_agent_index"] = 0
 
-    # (Optional) Normalization function, if you want to scale weights:
-    def normalize_to_minus1_plus1(arr):
-        arr = np.array(arr, dtype=float)
-        mn, mx = arr.min(), arr.max()
-        if mx == mn:
-            return np.zeros_like(arr)
-        return 2 * (arr - mn) / (mx - mn) - 1
+        # ────────────────────────────────────────────────
+        # 4. Navigation widgets
+        # ────────────────────────────────────────────────
+        col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 2])
 
-    if available_fids:
+        with col_nav1:
+            if st.button("⬅️ Previous Agent") and st.session_state["current_irl_agent_index"] > 0:
+                st.session_state["current_irl_agent_index"] -= 1
+        with col_nav2:
+            if st.button("➡️ Next Agent") and st.session_state["current_irl_agent_index"] < len(available_fids) - 1:
+                st.session_state["current_irl_agent_index"] += 1
+        with col_nav3:
+            manual_fid = st.text_input("🔎 Jump to FactorizedID:", value="")
+            if manual_fid.strip().isdigit() and manual_fid.strip() in available_fids:
+                st.session_state["current_irl_agent_index"] = available_fids.index(manual_fid.strip())
+
+        st.write("---")
+        compare_check = st.checkbox("🔁 Compare with After (CB)")
+
+        # optional helper
+        def normalize_to_minus1_plus1(arr):
+            arr = np.asarray(arr, dtype=float)
+            mn, mx = arr.min(), arr.max()
+            return np.zeros_like(arr) if mx == mn else 2 * (arr - mn) / (mx - mn) - 1
+
+        # ────────────────────────────────────────────────
+        # 5. Main display
+        # ────────────────────────────────────────────────
+        if not available_fids:
+            st.warning("No IRL output folders found.")
+            st.stop()
+
         current_fid = available_fids[st.session_state["current_irl_agent_index"]]
-        agent_id = get_agent_id_from_fid(current_fid)
-        st.info(f"**FactorizedID:** `{current_fid}` | **Agent ID:** `{agent_id}`")
+        agent_id    = get_agent_id_from_fid(current_fid)
+        st.info(f"**FactorizedID:** `{current_fid}`   |   **Agent ID:** `{agent_id}`")
 
-        # Non-time "before" paths
-        fb = os.path.join(OUTPUT_FOLDER, current_fid)
-        feat_before   = os.path.join(fb, "empirical_feature_values.csv")
-        wght_before   = os.path.join(fb, "learned_weights.csv")
-        met_before    = os.path.join(fb, "training_metrics.csv")
+        # ---------- file paths (CAT) ----------
+        fb           = os.path.join(OUTPUT_FOLDER, current_fid)
+        feat_before  = os.path.join(fb, "empirical_feats.csv")
+        wght_before  = os.path.join(fb, "weights.csv")
+        met_before   = os.path.join(fb, "training_metrics.csv")  # optional
 
-        # Time-based "before" paths
-        fbt = os.path.join(OUTPUT_FOLDER_Time, current_fid)
-        feat_before_t = os.path.join(fbt, "raw_empirical_feature_values.csv")  # We will NOT plot
-        wght_before_t = os.path.join(fbt, "learned_weights.csv")
-        met_before_t  = os.path.join(fbt, "training_metrics.csv")
+        # ---------- file paths (TIME) ----------
+        fbt           = os.path.join(OUTPUT_FOLDER_Time, current_fid)
+        feat_before_t = os.path.join(fbt, "empirical_feats.csv")
+        wght_before_t = os.path.join(fbt, "weights.csv")
+        met_before_t  = os.path.join(fbt, "training_metrics.csv")  # optional
 
-        compare_mode = False
+        # optionally compare
         if compare_check:
-            fa  = os.path.join(COMPARE_FOLDER, current_fid)
-            feat_after   = os.path.join(fa, "empirical_feature_values.csv")
-            wght_after   = os.path.join(fa, "learned_weights.csv")
-            met_after    = os.path.join(fa, "training_metrics.csv")
+            fa            = os.path.join(COMPARE_FOLDER, current_fid)
+            feat_after    = os.path.join(fa, "empirical_feats.csv")
+            wght_after    = os.path.join(fa, "weights.csv")
+            met_after     = os.path.join(fa, "training_metrics.csv")
 
-            fat = os.path.join(COMPARE_FOLDER_Time, current_fid)
-            feat_after_t = os.path.join(fat, "raw_empirical_feature_values.csv")  # We do NOT plot
-            wght_after_t = os.path.join(fat, "learned_weights.csv")
-            met_after_t  = os.path.join(fat, "training_metrics.csv")
-            compare_mode = True
+            fat           = os.path.join(COMPARE_FOLDER_Time, current_fid)
+            feat_after_t  = os.path.join(fat, "empirical_feats.csv")
+            wght_after_t  = os.path.join(fat, "weights.csv")
+            met_after_t   = os.path.join(fat, "training_metrics.csv")
 
-        # For simpler grouping, let's separate location-based vs mode-based features:
-        # location-based (non-time) => indices [0..11],  mode-based => [12..16]
+        # ────────────────────────────────────────────────
+        # 6. Labels & indices (unchanged)
+        # ────────────────────────────────────────────────
         loc_feat_labels = [
             "Home", "Comm & Gov", "Arts & Ent", "Landmarks & Outdr",
             "Travel & Transp", "Dining & Drink", "Business & Prof Serv", "Sports & Rec",
             "Retail", "Health & Med", "Event", "Education"
         ]
         mode_feat_labels = ["walk", "cycle", "car", "bus", "mrt"]
-        # Similarly for time-based
-        loc_feat_time_labels = [
-            "Time:Home", "Time:Comm & Gov", "Time:Arts & Ent", "Time:Landmarks & Outdr",
-            "Time:Travel & Transp", "Time:Dining & Drink", "Time:Business & Prof Serv", "Time:Sports & Rec",
-            "Time:Retail", "Time:Health & Med", "Time:Event", "Time:Education"
-        ]
-        mode_feat_time_labels = [
-            "Time:walk","Time:cycle","Time:car","Time:bus","Time:mrt"
-        ]
+        loc_feat_time_labels  = [f"Time:{l}" for l in loc_feat_labels]
+        mode_feat_time_labels = ["Time:" + m for m in mode_feat_labels]
 
+        loc_indices  = list(range(12))   # 0‑11
+        mode_indices = list(range(12, 17))
+        loc_time_indices  = list(range(12))
+        mode_time_indices = list(range(12, 17))
+
+        # ────────────────────────────────────────────────
+        # 7. Load CSVs & plot
+        # ────────────────────────────────────────────────
         try:
-            # Load "before" files
+            # ---- BEFORE ----
             df_feat_b  = pd.read_csv(feat_before)
             df_wght_b  = pd.read_csv(wght_before)
-            df_met_b   = pd.read_csv(met_before)
 
-            df_feat_b_t  = pd.read_csv(feat_before_t) # won't plot
-            df_wght_b_t  = pd.read_csv(wght_before_t)
-            df_met_b_t   = pd.read_csv(met_before_t)
+            df_feat_b_t = pd.read_csv(feat_before_t)
+            df_wght_b_t = pd.read_csv(wght_before_t)
 
-            if compare_mode:
-                df_feat_a   = pd.read_csv(feat_after)
-                df_wght_a   = pd.read_csv(wght_after)
-                df_met_a    = pd.read_csv(met_after)
+            # ---- AFTER (optional) ----
+            if compare_check:
+                df_feat_a  = pd.read_csv(feat_after)
+                df_wght_a  = pd.read_csv(wght_after)
 
                 df_feat_a_t = pd.read_csv(feat_after_t)
                 df_wght_a_t = pd.read_csv(wght_after_t)
-                df_met_a_t  = pd.read_csv(met_after_t)
 
-            # ---------------------------------
-            # 1) Non-time: Empirical features & learned weights
-            # ---------------------------------
-            st.subheader("🔹 Non-Time IRL: Empirical Features & Learned Weights")
-
-            # We group "location" vs "mode" for better clarity
-
-            # Location-based features
-            loc_indices = list(range(12))  # columns 0..11
-            mode_indices = list(range(12, 17)) # columns 12..16
-
-            # (A) Empirical: location-based + mode-based
+            # ──────────────────────────
+            # A) Non‑time  • Empirical & Weights
+            # ──────────────────────────
+            st.subheader("🔹 Non‑Time (IRL) – Empirical Features & Learned Weights")
             col1, col2 = st.columns(2)
 
+            # --- 1. location empirical ---
             with col1:
-                # location-based empirical
-                if compare_mode:
-                    df_loc_feat = pd.DataFrame({
+                if compare_check:
+                    df = pd.DataFrame({
                         "Feature": loc_feat_labels,
                         "Before": df_feat_b.iloc[0, loc_indices].values,
                         "After":  df_feat_a.iloc[0, loc_indices].values
                     })
-                    fig_loc_feat = px.bar(
-                        df_loc_feat.melt(id_vars=["Feature"], var_name="Period", value_name="Value"),
-                        x="Feature", y="Value",
-                        color="Period", barmode="group",
-                        title="Empirical (Location) Before vs After"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Value"),
+                                x="Feature", y="Value", color="Period",
+                                title="Empirical (Location) – Before vs After",
+                                barmode="group")
                 else:
-                    fig_loc_feat = px.bar(
-                        x=loc_feat_labels,
-                        y=df_feat_b.iloc[0, loc_indices].values,
-                        labels={"x":"Feature","y":"Value"},
-                        title="Empirical (Location) [Before]"
-                    )
-                fig_loc_feat.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_loc_feat, use_container_width=True)
+                    fig = px.bar(x=loc_feat_labels,
+                                y=df_feat_b.iloc[0, loc_indices].values,
+                                labels={"x":"Feature","y":"Value"},
+                                title="Empirical (Location) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
+            # --- 2. location weights ---
             with col2:
-                # location-based learned weights
-                if compare_mode:
-                    df_loc_wght = pd.DataFrame({
+                if compare_check:
+                    df = pd.DataFrame({
                         "Feature": loc_feat_labels,
                         "Before": df_wght_b.iloc[-1, loc_indices].values,
                         "After":  df_wght_a.iloc[-1, loc_indices].values
                     })
-                    fig_loc_wght = px.bar(
-                        df_loc_wght.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Learned Weights (Location) Before vs After"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Weight"),
+                                x="Feature", y="Weight", color="Period",
+                                title="Weights (Location) – Before vs After",
+                                barmode="group")
                 else:
-                    fig_loc_wght = px.bar(
-                        x=loc_feat_labels,
-                        y=df_wght_b.iloc[-1, loc_indices].values,
-                        labels={"x":"Feature","y":"Weight"},
-                        title="Learned Weights (Location) [Before]"
-                    )
-                fig_loc_wght.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_loc_wght, use_container_width=True)
+                    fig = px.bar(x=loc_feat_labels,
+                                y=df_wght_b.iloc[-1, loc_indices].values,
+                                labels={"x":"Feature","y":"Weight"},
+                                title="Weights (Location) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
-            # (B) Learned Weights: location + mode
+            # --- MODE‑based (empirical & weight) ---
             st.write("---")
             col3, col4 = st.columns(2)
 
             with col3:
-                # mode-based empirical
-                if compare_mode:
-                    df_mode_feat = pd.DataFrame({
+                if compare_check:
+                    df = pd.DataFrame({
                         "Feature": mode_feat_labels,
                         "Before": df_feat_b.iloc[0, mode_indices].values,
                         "After":  df_feat_a.iloc[0, mode_indices].values
                     })
-                    fig_mode_feat = px.bar(
-                        df_mode_feat.melt(id_vars=["Feature"], var_name="Period", value_name="Value"),
-                        x="Feature", y="Value",
-                        color="Period", barmode="group",
-                        title="Empirical (Mode) Before vs After"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Value"),
+                                x="Feature", y="Value", color="Period",
+                                title="Empirical (Mode) – Before vs After",
+                                barmode="group")
                 else:
-                    fig_mode_feat = px.bar(
-                        x=mode_feat_labels,
-                        y=df_feat_b.iloc[0, mode_indices].values,
-                        labels={"x":"Feature","y":"Value"},
-                        title="Empirical (Mode) [Before]"
-                    )
-                fig_mode_feat.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_mode_feat, use_container_width=True)                
-
+                    fig = px.bar(x=mode_feat_labels,
+                                y=df_feat_b.iloc[0, mode_indices].values,
+                                labels={"x":"Feature","y":"Value"},
+                                title="Empirical (Mode) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
             with col4:
-                # mode-based learned weights
-                if compare_mode:
-                    df_mode_wght = pd.DataFrame({
+                if compare_check:
+                    df = pd.DataFrame({
                         "Feature": mode_feat_labels,
                         "Before": df_wght_b.iloc[-1, mode_indices].values,
                         "After":  df_wght_a.iloc[-1, mode_indices].values
                     })
-                    fig_mode_wght = px.bar(
-                        df_mode_wght.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Learned Weights (Mode) Before vs After"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Weight"),
+                                x="Feature", y="Weight", color="Period",
+                                title="Weights (Mode) – Before vs After",
+                                barmode="group")
                 else:
-                    fig_mode_wght = px.bar(
-                        x=mode_feat_labels,
-                        y=df_wght_b.iloc[-1, mode_indices].values,
-                        labels={"x":"Feature","y":"Weight"},
-                        title="Learned Weights (Mode) [Before]"
-                    )
-                fig_mode_wght.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_mode_wght, use_container_width=True)
+                    fig = px.bar(x=mode_feat_labels,
+                                y=df_wght_b.iloc[-1, mode_indices].values,
+                                labels={"x":"Feature","y":"Weight"},
+                                title="Weights (Mode) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
-            # # (C) Non-time training metrics
-            # st.write("---")
-            # st.subheader("📉 Non-Time Training Metrics (Before vs After)")
+            # ──────────────────────────
+            # B) Time‑based  • Empirical & Weights
+            # ──────────────────────────
+            st.write("---")
+            st.subheader("🔹 Time‑Based (IRL) – Empirical & Weights")
 
-            # # Show 2x2 for before, optionally 2x2 for after
-            # col5, col6 = st.columns(2)
-            # col7, col8 = st.columns(2)
-
-            # fig_grad_b = px.line(df_met_b, x="iteration", y="grad_norm", title="Grad Norm (Before)")
-            # fig_mm_b   = px.line(df_met_b, x="iteration", y="feature_mismatch", title="Feat. Mismatch (Before)")
-            # fig_nll_b  = px.line(df_met_b, x="iteration", y="neg_log_likelihood", title="NLL (Before)")
-            # fig_rwd_b  = px.line(df_met_b, x="iteration", y="reward_norm", title="Reward Norm (Before)")
-
-            # with col5: st.plotly_chart(fig_grad_b, use_container_width=True)
-            # with col6: st.plotly_chart(fig_mm_b,   use_container_width=True)
-            # with col7: st.plotly_chart(fig_nll_b,  use_container_width=True)
-            # with col8: st.plotly_chart(fig_rwd_b,  use_container_width=True)
-
-            # if compare_mode:
-            #     st.write("---")
-            #     st.subheader("📉 Non-Time Training Metrics (After)")
-            #     colA1, colA2 = st.columns(2)
-            #     colA3, colA4 = st.columns(2)
-
-            #     fig_grad_a = px.line(df_met_a, x="iteration", y="grad_norm", title="Grad Norm (After)")
-            #     fig_mm_a   = px.line(df_met_a, x="iteration", y="feature_mismatch", title="Feat. Mismatch (After)")
-            #     fig_nll_a  = px.line(df_met_a, x="iteration", y="neg_log_likelihood", title="NLL (After)")
-            #     fig_rwd_a  = px.line(df_met_a, x="iteration", y="reward_norm", title="Reward Norm (After)")
-
-            #     with colA1: st.plotly_chart(fig_grad_a, use_container_width=True)
-            #     with colA2: st.plotly_chart(fig_mm_a,   use_container_width=True)
-            #     with colA3: st.plotly_chart(fig_nll_a,  use_container_width=True)
-            #     with colA4: st.plotly_chart(fig_rwd_a,  use_container_width=True)
-
-            # --------------------------------------------------
-            # 2) Time-based Learned Weights only
-            # (No time-based empirical features!)
-            # --------------------------------------------------
-            # st.write("---")
-            # st.subheader("🔹 Time-Based Learned Weights (Location vs Mode)")
-
-            # location-time columns => first 12
-            # mode-time columns => next 5
-            loc_time_indices = list(range(12))  # 0..11
-            mode_time_indices = list(range(12,17))  # 12..16
-
-            # Load time-based
-            tf_b = df_feat_b_t.iloc[-1, :17].values
-            tw_b = df_wght_b_t.iloc[-1, :17].values  # first 17 columns
-            if compare_mode:
+            tf_b = df_feat_b_t.iloc[-1, :17].values   # 17 feature cols + feature_set
+            tw_b = df_wght_b_t.iloc[-1, :17].values
+            if compare_check:
                 tf_a = df_feat_a_t.iloc[-1, :17].values
                 tw_a = df_wght_a_t.iloc[-1, :17].values
 
-            loc_time_labels = [
-                "Time:Home","Time:Comm & Gov","Time:Arts & Ent","Time:Landmarks & Outdr",
-                "Time:Travel & Transp","Time:Dining & Drink","Time:Business & Prof Serv","Time:Sports & Rec",
-                "Time:Retail","Time:Health & Med","Time:Event","Time:Education"
-            ]
-            mode_time_labels = ["Time:walk","Time:cycle","Time:car","Time:bus","Time:mrt"]
-
-            colX1, colX2 = st.columns(2)
-            with colX1:
-                # location-time-based learned weights
-                if compare_mode:
-                    df_loc_time = pd.DataFrame({
-                        "Feature": loc_time_labels,
+            # ---- Location‑time ----
+            colT1, colT2 = st.columns(2)
+            with colT1:
+                if compare_check:
+                    df = pd.DataFrame({
+                        "Feature": loc_feat_time_labels,
                         "Before": tf_b[loc_time_indices],
                         "After":  tf_a[loc_time_indices]
                     })
-                    fig_loc_time = px.bar(
-                        df_loc_time.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Time-Based Empirical Features (Location) [Before vs After]"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Value"),
+                                x="Feature", y="Value", color="Period",
+                                title="Time Empirical (Location) – B vs A",
+                                barmode="group")
                 else:
-                    fig_loc_time = px.bar(
-                        x=loc_time_labels,
-                        y=tf_b[loc_time_indices],
-                        title="Time-Based Empirical Features (Location) [Before]"
-                    )
-                fig_loc_time.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_loc_time, use_container_width=True)
+                    fig = px.bar(x=loc_feat_time_labels, y=tf_b[loc_time_indices],
+                                title="Time Empirical (Location) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
-            with colX2:
-                # location-time-based learned weights
-                if compare_mode:
-                    df_loc_time = pd.DataFrame({
-                        "Feature": loc_time_labels,
+            with colT2:
+                if compare_check:
+                    df = pd.DataFrame({
+                        "Feature": loc_feat_time_labels,
                         "Before": tw_b[loc_time_indices],
                         "After":  tw_a[loc_time_indices]
                     })
-                    fig_loc_time = px.bar(
-                        df_loc_time.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Time-Based Weights (Location) [Before vs After]"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Weight"),
+                                x="Feature", y="Weight", color="Period",
+                                title="Time Weights (Location) – B vs A",
+                                barmode="group")
                 else:
-                    fig_loc_time = px.bar(
-                        x=loc_time_labels,
-                        y=tw_b[loc_time_indices],
-                        title="Time-Based Weights (Location) [Before]"
-                    )
-                fig_loc_time.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_loc_time, use_container_width=True)
-            colX3, colX4 = st.columns(2)
-            with colX3:
-                # location-time-based learned weights
-                if compare_mode:
-                    df_loc_time = pd.DataFrame({
-                        "Feature": mode_time_labels,
+                    fig = px.bar(x=loc_feat_time_labels, y=tw_b[loc_time_indices],
+                                title="Time Weights (Location) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+
+            # ---- Mode‑time ----
+            colT3, colT4 = st.columns(2)
+            with colT3:
+                if compare_check:
+                    df = pd.DataFrame({
+                        "Feature": mode_feat_time_labels,
                         "Before": tf_b[mode_time_indices],
                         "After":  tf_a[mode_time_indices]
                     })
-                    fig_loc_time = px.bar(
-                        df_loc_time.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Time-Based Empirical Features (Mode) [Before vs After]"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Value"),
+                                x="Feature", y="Value", color="Period",
+                                title="Time Empirical (Mode) – B vs A",
+                                barmode="group")
                 else:
-                    fig_loc_time = px.bar(
-                        x=mode_time_labels,
-                        y=tf_b[mode_time_indices],
-                        title="Time-Based Empirical Features (Mode) [Before]"
-                    )
-                fig_loc_time.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_loc_time, use_container_width=True)
+                    fig = px.bar(x=mode_feat_time_labels, y=tf_b[mode_time_indices],
+                                title="Time Empirical (Mode) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
-            with colX4:
-                # mode-time-based learned weights
-                if compare_mode:
-                    df_mode_time = pd.DataFrame({
-                        "Feature": mode_time_labels,
+            with colT4:
+                if compare_check:
+                    df = pd.DataFrame({
+                        "Feature": mode_feat_time_labels,
                         "Before": tw_b[mode_time_indices],
                         "After":  tw_a[mode_time_indices]
                     })
-                    fig_mode_time = px.bar(
-                        df_mode_time.melt(id_vars=["Feature"], var_name="Period", value_name="Weight"),
-                        x="Feature", y="Weight",
-                        color="Period", barmode="group",
-                        title="Time-Based Weights (Mode) [Before vs After]"
-                    )
+                    fig = px.bar(df.melt("Feature", var_name="Period", value_name="Weight"),
+                                x="Feature", y="Weight", color="Period",
+                                title="Time Weights (Mode) – B vs A",
+                                barmode="group")
                 else:
-                    fig_mode_time = px.bar(
-                        x=mode_time_labels,
-                        y=tw_b[mode_time_indices],
-                        title="Time-Based Weights (Mode) [Before]"
-                    )
-                fig_mode_time.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_mode_time, use_container_width=True)
-
-            # # Time-based metrics
-            # st.write("---")
-            # st.subheader("📉 Time-Based Training Metrics (Before vs After)")
-
-            # # Before (2x2)
-            # colY1, colY2 = st.columns(2)
-            # colY3, colY4 = st.columns(2)
-
-            # fig_t_grad_b = px.line(df_met_b_t, x="iteration", y="grad_norm", title="Time Grad Norm (Before)")
-            # fig_t_mm_b   = px.line(df_met_b_t, x="iteration", y="feature_mismatch", title="Time Feat Mismatch (Before)")
-            # fig_t_nll_b  = px.line(df_met_b_t, x="iteration", y="neg_log_likelihood", title="Time NLL (Before)")
-            # fig_t_rwd_b  = px.line(df_met_b_t, x="iteration", y="reward_norm", title="Time Reward Norm (Before)")
-
-            # with colY1: st.plotly_chart(fig_t_grad_b, use_container_width=True)
-            # with colY2: st.plotly_chart(fig_t_mm_b,   use_container_width=True)
-            # with colY3: st.plotly_chart(fig_t_nll_b,  use_container_width=True)
-            # with colY4: st.plotly_chart(fig_t_rwd_b,  use_container_width=True)
-
-            # if compare_mode:
-            #     st.write("---")
-            #     st.subheader("Time-Based Metrics (After)")
-            #     colZ1, colZ2 = st.columns(2)
-            #     colZ3, colZ4 = st.columns(2)
-
-            #     fig_t_grad_a = px.line(df_met_a_t, x="iteration", y="grad_norm", title="Time Grad Norm (After)")
-            #     fig_t_mm_a   = px.line(df_met_a_t, x="iteration", y="feature_mismatch", title="Time Feat Mismatch (After)")
-            #     fig_t_nll_a  = px.line(df_met_a_t, x="iteration", y="neg_log_likelihood", title="Time NLL (After)")
-            #     fig_t_rwd_a  = px.line(df_met_a_t, x="iteration", y="reward_norm", title="Time Reward Norm (After)")
-
-            #     with colZ1: st.plotly_chart(fig_t_grad_a, use_container_width=True)
-            #     with colZ2: st.plotly_chart(fig_t_mm_a,   use_container_width=True)
-            #     with colZ3: st.plotly_chart(fig_t_nll_a,  use_container_width=True)
-            #     with colZ4: st.plotly_chart(fig_t_rwd_a,  use_container_width=True)
+                    fig = px.bar(x=mode_feat_time_labels, y=tw_b[mode_time_indices],
+                                title="Time Weights (Mode) – Before")
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
 
         except Exception as e:
-            st.error(f"❌ Failed to load IRL result files for `{current_fid}`: {e}")
-    else:
-        st.warning("No IRL output folders found.")
-
-
+            st.error(f"❌ Failed to load IRL result files for `{current_fid}`: {e}")
